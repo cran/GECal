@@ -85,13 +85,13 @@ and \eqn{\phi_i} be the scaling factor for the calibration weights \eqn{\omega_i
 If \code{method == "GEC"}, \code{GEcalib} minimizes the negative entropy:
 \deqn{\sum_{i \in A} q_iG(\phi_i\omega_i),}
 with respect to \eqn{\bm \omega} subject to the calibration constraints \eqn{\sum_{i \in A} \omega_i \bm{z}_i = \sum_{i \in U} \bm{z}_i},
-where \eqn{\bm{z}_i^T = (\bm{x}_i^T, q_i \phi_i g(q_i \phi_i d_i))}, \eqn{A} denotes the sample index, and \eqn{U} represents the population index. 
+where \eqn{\bm{z}_i^T = (\bm{x}_i^T, q_i \phi_i g(\phi_i d_i))}, \eqn{A} denotes the sample index, and \eqn{U} represents the population index. 
 
 If \code{method == "GEC"}, but an element of \code{const} corresponding to the debiasing covariate 
 \eqn{g(d_i)} is \code{NA}, \code{GEcalib} minimizes the negative adjusted entropy:
 \deqn{\sum_{i \in A} q_iG(\phi_i\omega_i) - K(\alpha),}
 with respect to \eqn{\bm \omega} and \eqn{\alpha} subject to the calibration constraints 
-\eqn{\sum_{i \in A} \omega_i (\bm{x}_i^T, q_i \phi_i g(q_i \phi_i d_i)) = \left(\sum_{i \in U} \bm x_i, \alpha \right)},
+\eqn{\sum_{i \in A} \omega_i (\bm{x}_i^T, q_i \phi_i g(\phi_i d_i)) = \left(\sum_{i \in U} \bm x_i, \alpha \right)},
 where the solution \eqn{\hat \alpha} is an estimate of population total for \eqn{g(d_i)}.
 Examples of \eqn{K(\alpha)} includes \eqn{K(\alpha) = \alpha} when \code{K_alpha == NULL}, and 
 \deqn{K(\alpha) = \left(\sum_{i \in A} d_i g(d_i) + N \right) 
@@ -138,6 +138,7 @@ for a threshold \eqn{\delta} when \code{entropy == "PH"}.
 }
 
 \examples{
+set.seed(11)
 N = 10000
 x = data.frame(x1 = rnorm(N, 2, 1), x2= runif(N, 0, 4))
 pi = pt((-x[,1] / 2 - x[,2] / 2), 3);
@@ -159,12 +160,11 @@ w2 <- GECal::GEcalib(~ ., dweight = d_S, data = x_S,
                     entropy = "ET", method = "GEC0")$w
 all.equal(w1, w2)
 
-\donttest{
 # Generalized entropy calibration with debiasing covariate
 w3 <- GECal::GEcalib(~ . + g(d_S), dweight = d_S, data = x_S,
                     const = colSums(cbind(1, x, log(1 / pi))),
                     entropy = "ET", method = "GEC")$w
-
+                    
 # Generalized entropy calibration with debiasing covariate
 # when its population total is unknown
 w4 <- GECal::GEcalib(~ . + g(d_S), dweight = d_S, data = x_S,
@@ -174,8 +174,7 @@ all.equal(w1, w4)
 
 w5 <- GECal::GEcalib(~ . + g(d_S), dweight = d_S, data = x_S,
 const = colSums(cbind(1, x, NA)),
-entropy = "ET", method = "GEC", K_alpha = "log")$w                     
-}
+entropy = "ET", method = "GEC", K_alpha = "log")$w 
 }
 \references{
 Kwon, Y., Kim, J., & Qiu, Y. (2024). Debiased calibration estimation using generalized entropy in survey sampling.
