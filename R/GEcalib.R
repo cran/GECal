@@ -11,7 +11,7 @@
 #' and \eqn{d_i} is the design weight for each sampled unit \eqn{i \in A}.
 #' 
 #' @import nleqslv
-#' @importFrom stats model.frame model.matrix nlm quantile
+#' @importFrom stats model.frame model.matrix nlm quantile reformulate
 #' 
 #' @param formula An object of class "formula" specifying the calibration model. 
 #' @param dweight A vector of sampling weights.
@@ -22,8 +22,8 @@
 #' If numeric, \code{entropy} represents the order of Renyi's entropy, where 
 #' \eqn{G(\omega) = r^{-1}(r+1)^{-1}\omega^{r+1}} if \eqn{r \neq 0, -1}.
 #' If a string, valid options include: 
-#' "SL" (Squared-loss), "EL" (Empirical Likelihood), "ET" (Exponential Tilting), 
-#' "CE" (Cross-Entropy), "HD" (Hellinger Distance), and "PH" (Pseudo-Huber). See "Summary" for details.
+#' "SL" (Squared-loss, \eqn{r = 1}), "EL" (Empirical Likelihood, \eqn{r = -1}), "ET" (Exponential Tilting, \eqn{r = 0}), 
+#' "HD" (Hellinger Distance, \eqn{r = -1/2}), "CE" (Cross-Entropy), and "PH" (Pseudo-Huber). See "Summary" for details.
 #' @param weight.scale Positive scaling factor for the calibration weights \eqn{\omega_i}. Asymptotics justify setting \code{weight.scale} 
 #' to the finite population correction (\eqn{fpc = n / N}).
 #' @param G.scale Positive scaling factor for the generalized entropy function \eqn{G}. Asymptotics justify setting 
@@ -32,6 +32,9 @@
 #' \eqn{g(d_i)} is not available. \code{K_alpha} can be \code{NULL}, \code{"log"}, or custom functions. See "Details".  
 #' @param is.total Logical, \code{TRUE} if \code{sum(const[1])} equals the population size.
 #' @param del The optional threshold (\eqn{\delta}) used when Pseudo-Huber (PH) entropy is selected.
+#' @param xtol Optional relative steplength tolerance in nleqslv
+#' @param maxit Optional maximum number of major iterations in nleqslv
+#' @param allowSingular Optional logical value indicating if a small correction to the Jacobian is allowed in nleqslv
 #' \code{del = quantile(dweight, 0.75)} if not specified.
 #' 
 #' @return A list of class \code{calibration} including the calibration weights 
@@ -72,7 +75,7 @@
 #' when \code{K_alpha == "log"}.
 #' 
 #' If \code{method == "GEC0"}, \code{GEcalib} minimizes the negative adjusted entropy:
-#' \deqn{\sum_{i \in A} q_iG(\phi_i\omega_i) - q_i\phi_i\omega_i g(\phi_i \omega_i)}
+#' \deqn{\sum_{i \in A} q_iG(\phi_i\omega_i) - q_i\phi_i\omega_i g(\phi_i d_i)}
 #' with respect to \eqn{\bm \omega} subject to the calibration constraints \eqn{\sum_{i \in A} \omega_i \bm{x}_i = \sum_{i \in U} \bm{x}_i}.
 #' 
 #' If \code{method == "DS"}, \code{GEcalib} minimizes the divergence between \eqn{\bm \omega} and \eqn{\bm d}:
@@ -164,7 +167,8 @@ GEcalib = function(formula, dweight, data = NULL, const,
                     # weight.bound = NULL, 
                    weight.scale = 1, G.scale = 1,
                     # opt.method = c("nleqslv", "optim", "CVXR"),
-                    K_alpha = NULL, is.total = TRUE, del = NULL
+                    K_alpha = NULL, is.total = TRUE, del = NULL,
+                   xtol = 1e-16, maxit = 1e5, allowSingular = T
 ){
   entropy <- if (is.numeric(entropy)) {
     entropy  # Assign entropy directly if it's numeric
@@ -261,7 +265,8 @@ GEcalib = function(formula, dweight, data = NULL, const,
         nlmres= nlm(targetftn, p = What, d = d, Xs = Xs, init = init,
                     const = const, entropy = entropy, del = del, 
                     weight.scale = weight.scale, G.scale = G.scale,
-                    intercept = intercept, K_alpha = K_alpha)
+                    intercept = intercept, K_alpha = K_alpha,
+                    maxit = maxit, allowSingular = allowSingular, xtol = xtol)
         if(nlmres$code != 1 & nlmres$code != 2 & nlmres$code != 3){
           stop(message(paste("Messeage from nlm: nlmres$code =", nlmres$code)))
         }
@@ -270,12 +275,13 @@ GEcalib = function(formula, dweight, data = NULL, const,
           message(paste("Messeage from nlm: nlmres$code =", nlmres$code,
                         ", nlmres$minimum =", nlmres$minimum))
           warning("Convergence failed")
-          w = NA
+          w = rep(NA, length(d))
         }else{
           w = targetftn(W, d = d, Xs = Xs, init = init,
                         const = const, entropy = entropy, del = del,
                         weight.scale = weight.scale, G.scale = G.scale,
-                        intercept = intercept, K_alpha = K_alpha, returnw = TRUE)
+                        intercept = intercept, K_alpha = K_alpha, returnw = TRUE,
+                        maxit = maxit, allowSingular = allowSingular, xtol = xtol)
         }
       }else{
         stop("NA appears in const outside g(d)")
@@ -284,7 +290,8 @@ GEcalib = function(formula, dweight, data = NULL, const,
       nleqslv_res = nleqslv::nleqslv(init, f, jac = h, d = d, Xs = Xs, 
                                      const = const, entropy = entropy, del = del,
                                      weight.scale = weight.scale, G.scale = G.scale,
-                                     intercept = intercept, control = list(maxit = 1e5, allowSingular = TRUE),
+                                     intercept = intercept, 
+                                     control = list(maxit = maxit, allowSingular = allowSingular, xtol = xtol),
                                      xscalm = "auto")
       # control = control
       
@@ -294,11 +301,12 @@ GEcalib = function(formula, dweight, data = NULL, const,
                     weight.scale = weight.scale, G.scale = G.scale,
                     intercept = intercept)
         
-        if(any(is.nan(tmpval)) | (max(abs(tmpval)) > 1e-5)){
+        if(any(is.nan(tmpval)) | (norm(tmpval, type = "2") > 1e-3)){
           message(paste("Messeage from nleqslv: nleqslv_res$message =", nleqslv_res$message,
+                        ", norm(tmpval, type = \"2\") =", norm(tmpval, type = "2"),
                         ", nleqslv_res$termcd =", nleqslv_res$termcd))
           warning("Convergence failed")
-          w = NA      
+          w = rep(NA, length(d))   
         }else{
           w = NULL
         }

@@ -15,7 +15,10 @@ GEcalib(
   G.scale = 1,
   K_alpha = NULL,
   is.total = TRUE,
-  del = NULL
+  del = NULL,
+  xtol = 1e-16,
+  maxit = 1e+05,
+  allowSingular = T
 )
 }
 \arguments{
@@ -33,8 +36,8 @@ GEcalib(
 If numeric, \code{entropy} represents the order of Renyi's entropy, where 
 \eqn{G(\omega) = r^{-1}(r+1)^{-1}\omega^{r+1}} if \eqn{r \neq 0, -1}.
 If a string, valid options include: 
-"SL" (Squared-loss), "EL" (Empirical Likelihood), "ET" (Exponential Tilting), 
-"CE" (Cross-Entropy), "HD" (Hellinger Distance), and "PH" (Pseudo-Huber). See "Summary" for details.}
+"SL" (Squared-loss, \eqn{r = 1}), "EL" (Empirical Likelihood, \eqn{r = -1}), "ET" (Exponential Tilting, \eqn{r = 0}), 
+"HD" (Hellinger Distance, \eqn{r = -1/2}), "CE" (Cross-Entropy), and "PH" (Pseudo-Huber). See "Summary" for details.}
 
 \item{weight.scale}{Positive scaling factor for the calibration weights \eqn{\omega_i}. Asymptotics justify setting \code{weight.scale} 
 to the finite population correction (\eqn{fpc = n / N}).}
@@ -47,7 +50,13 @@ to the finite population correction (\eqn{fpc = n / N}).}
 
 \item{is.total}{Logical, \code{TRUE} if \code{sum(const[1])} equals the population size.}
 
-\item{del}{The optional threshold (\eqn{\delta}) used when Pseudo-Huber (PH) entropy is selected.
+\item{del}{The optional threshold (\eqn{\delta}) used when Pseudo-Huber (PH) entropy is selected.}
+
+\item{xtol}{Optional relative steplength tolerance in nleqslv}
+
+\item{maxit}{Optional maximum number of major iterations in nleqslv}
+
+\item{allowSingular}{Optional logical value indicating if a small correction to the Jacobian is allowed in nleqslv
 \code{del = quantile(dweight, 0.75)} if not specified.}
 }
 \value{
@@ -99,7 +108,7 @@ Examples of \eqn{K(\alpha)} includes \eqn{K(\alpha) = \alpha} when \code{K_alpha
 when \code{K_alpha == "log"}.
 
 If \code{method == "GEC0"}, \code{GEcalib} minimizes the negative adjusted entropy:
-\deqn{\sum_{i \in A} q_iG(\phi_i\omega_i) - q_i\phi_i\omega_i g(\phi_i \omega_i)}
+\deqn{\sum_{i \in A} q_iG(\phi_i\omega_i) - q_i\phi_i\omega_i g(\phi_i d_i)}
 with respect to \eqn{\bm \omega} subject to the calibration constraints \eqn{\sum_{i \in A} \omega_i \bm{x}_i = \sum_{i \in U} \bm{x}_i}.
 
 If \code{method == "DS"}, \code{GEcalib} minimizes the divergence between \eqn{\bm \omega} and \eqn{\bm d}:
